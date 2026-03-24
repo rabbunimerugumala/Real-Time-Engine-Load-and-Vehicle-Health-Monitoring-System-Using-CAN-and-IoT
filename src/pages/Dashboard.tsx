@@ -1,11 +1,11 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Thermometer, Weight, Fuel, DoorOpen, DoorClosed, Activity, Navigation } from 'lucide-react';
+import { Thermometer, Weight, Fuel, DoorOpen, DoorClosed, Activity, Navigation, Droplets, Wind } from 'lucide-react';
 import Header from '../components/Header';
 import SensorCard from '../components/SensorCard';
 import MapView from '../components/MapView';
 import Charts from '../components/Charts';
-import { useVehicleData, startMockUpdates, stopMockUpdates } from '../hooks/useVehicleData';
+import { useVehicleData } from '../hooks/useVehicleData';
 
 interface DashboardProps {
   isDark: boolean;
@@ -43,17 +43,8 @@ function FuelBar({ value }: { value: number }) {
   );
 }
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
-
 const Dashboard: React.FC<DashboardProps> = ({ isDark, onToggleTheme }) => {
   const { data, history, loading, error } = useVehicleData();
-
-  useEffect(() => {
-    if (USE_MOCK) {
-      startMockUpdates();
-      return () => stopMockUpdates();
-    }
-  }, []);
 
   if (loading) {
     return (
@@ -80,7 +71,7 @@ const Dashboard: React.FC<DashboardProps> = ({ isDark, onToggleTheme }) => {
   }
 
   const sensors = data?.sensors;
-  const location = data?.location ?? { lat: 16.506, lng: 80.648 };
+  const gps = data?.gps ?? { lat: 16.506, lng: 80.648, fix: false, satellites: 0 };
   const online = data?.online ?? false;
 
   const sensorCards = [
@@ -113,6 +104,24 @@ const Dashboard: React.FC<DashboardProps> = ({ isDark, onToggleTheme }) => {
       description: sensors ? <FuelBar value={sensors.fuel} /> : undefined,
     },
     {
+      key: 'gas',
+      label: 'Gas Level',
+      value: sensors ? sensors.gas.toFixed(0) : '--',
+      unit: '%',
+      icon: <Wind className="w-5 h-5" />,
+      accent: 'gradient-purple',
+      status: 'normal' as const,
+    },
+    {
+      key: 'humidity',
+      label: 'Humidity',
+      value: sensors ? sensors.humidity.toFixed(0) : '--',
+      unit: '%',
+      icon: <Droplets className="w-5 h-5" />,
+      accent: 'gradient-blue',
+      status: 'normal' as const,
+    },
+    {
       key: 'door',
       label: 'Door Status',
       value: sensors?.door === 1 ? 'Open' : 'Closed',
@@ -133,20 +142,20 @@ const Dashboard: React.FC<DashboardProps> = ({ isDark, onToggleTheme }) => {
       status: 'normal' as const,
     },
     {
-      key: 'gforce',
-      label: 'G-Force',
-      value: sensors ? sensors.gforce.toFixed(2) : '--',
-      unit: 'g',
+      key: 'satellites',
+      label: 'GPS Satellites',
+      value: gps.satellites.toString(),
+      unit: '',
       icon: <Activity className="w-5 h-5" />,
-      accent: 'gradient-blue',
-      status: (sensors?.gforce ?? 0) > 2.5 ? 'warning' as const : 'normal' as const,
+      accent: 'gradient-green',
+      status: gps.fix ? 'normal' as const : 'warning' as const,
     },
   ];
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 transition-colors duration-300">
       <Header
-        vehicleId={data?.id ?? 'VEHICLE_01'}
+        vehicleId="VEHICLE_01"
         online={online}
         lastUpdated={data?.timestamp ?? null}
         isDark={isDark}
@@ -154,28 +163,13 @@ const Dashboard: React.FC<DashboardProps> = ({ isDark, onToggleTheme }) => {
       />
 
       <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-6">
-        {/* Mock mode banner */}
-        {USE_MOCK && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-2.5 bg-accent-500/10 border border-accent-400/20 rounded-xl px-4 py-2.5"
-          >
-            <span className="text-base">🤖</span>
-            <p className="text-xs font-medium text-accent-700 dark:text-accent-300">
-              <strong>Mock Mode Active</strong> — Live simulated data from the built-in generator. Set{' '}
-              <code className="font-mono bg-accent-500/10 px-1 rounded">VITE_USE_MOCK=false</code> and add your Firebase credentials to use real hardware.
-            </p>
-          </motion.div>
-        )}
-
         {/* ── Sensor Cards Grid ─────────────────────────────── */}
         <section>
           <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
             Live Sensors
           </h2>
           <AnimatePresence>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {sensorCards.map((card, i) => (
                 <SensorCard
                   key={card.key}
@@ -228,9 +222,9 @@ const Dashboard: React.FC<DashboardProps> = ({ isDark, onToggleTheme }) => {
             Live Location
           </h2>
           <MapView
-            lat={location.lat}
-            lng={location.lng}
-            vehicleId={data?.id ?? 'VEHICLE_01'}
+            lat={gps.lat}
+            lng={gps.lng}
+            vehicleId="VEHICLE_01"
             online={online}
           />
         </section>

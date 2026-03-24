@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ref, onValue, set } from 'firebase/database';
+import { ref, onValue } from 'firebase/database';
 import toast from 'react-hot-toast';
 import { db } from '../firebase/config';
 import type { VehicleData, HistoryPoint } from '../types/vehicle';
@@ -80,13 +80,34 @@ export function useVehicleData() {
     const unsubscribe = onValue(
       vehicleRef,
       (snapshot) => {
-        const val = snapshot.val() as VehicleData | null;
+        const val = snapshot.val();
         if (val) {
-          setData(val);
-          handleAlerts(val);
+          // Robust mapping with default values as requested
+          const structuredData: VehicleData = {
+            timestamp: val.timestamp || Date.now(),
+            online: val.online || false,
+            sensors: {
+              temperature: val.sensors?.temperature ?? 0,
+              load: val.sensors?.load ?? 0,
+              fuel: val.sensors?.fuel ?? 0,
+              gas: val.sensors?.gas ?? 0,
+              humidity: val.sensors?.humidity ?? 0,
+              tilt: val.sensors?.tilt ?? 0,
+              door: val.sensors?.door ?? 0,
+            },
+            gps: {
+              fix: val.gps?.fix ?? false,
+              satellites: val.gps?.satellites ?? 0,
+              lat: val.gps?.lat ?? 0,
+              lng: val.gps?.lng ?? 0,
+            },
+          };
+
+          setData(structuredData);
+          handleAlerts(structuredData);
 
           // Update history ring buffer
-          const timeLabel = new Date(val.timestamp).toLocaleTimeString('en-IN', {
+          const timeLabel = new Date(structuredData.timestamp).toLocaleTimeString('en-IN', {
             hour: '2-digit',
             minute: '2-digit',
             second: '2-digit',
@@ -98,8 +119,8 @@ export function useVehicleData() {
               ...prev,
               {
                 time: timeLabel,
-                temperature: parseFloat(val.sensors.temperature.toFixed(1)),
-                load: parseFloat(val.sensors.load.toFixed(0)),
+                temperature: parseFloat(structuredData.sensors.temperature.toFixed(1)),
+                load: parseFloat(structuredData.sensors.load.toFixed(0)),
               },
             ];
             return next.slice(-MAX_HISTORY);
@@ -117,57 +138,4 @@ export function useVehicleData() {
   }, [handleAlerts]);
 
   return { data, history, loading, error };
-}
-
-// ── Mock data generator ─────────────────────────────────────────────────────
-// Call this when VITE_USE_MOCK=true. It writes random sensor values to Firebase
-// every 2 seconds, simulating an ESP32 device.
-
-let mockIntervalId: ReturnType<typeof setInterval> | null = null;
-
-export function startMockUpdates() {
-  if (mockIntervalId) return;
-
-  // Base GPS near Vijayawada, AP
-  const BASE_LAT = 16.506;
-  const BASE_LNG = 80.648;
-  let step = 0;
-
-  const push = async () => {
-    step++;
-    const temp = 28 + 20 * Math.sin(step * 0.15) + (Math.random() - 0.5) * 4;
-    const load = 150 + 300 * Math.abs(Math.sin(step * 0.08)) + (Math.random() - 0.5) * 30;
-    const fuel = Math.max(5, 80 - step * 0.3 + (Math.random() - 0.5) * 2);
-    const tilt = (Math.random() - 0.5) * 12;
-    const gforce = 0.8 + Math.random() * 2.2;
-    const door = step % 25 === 0 ? 1 : 0; // briefly open every 25 ticks
-
-    await set(ref(db, 'vehicle'), {
-      id: 'VEHICLE_01',
-      online: true,
-      timestamp: Date.now(),
-      sensors: {
-        temperature: parseFloat(temp.toFixed(1)),
-        load: parseFloat(load.toFixed(0)),
-        fuel: parseFloat(fuel.toFixed(1)),
-        tilt: parseFloat(tilt.toFixed(2)),
-        gforce: parseFloat(gforce.toFixed(2)),
-        door,
-      },
-      location: {
-        lat: BASE_LAT + step * 0.0002,
-        lng: BASE_LNG + step * 0.0003,
-      },
-    });
-  };
-
-  push().catch(console.error);
-  mockIntervalId = setInterval(() => push().catch(console.error), 2000);
-}
-
-export function stopMockUpdates() {
-  if (mockIntervalId) {
-    clearInterval(mockIntervalId);
-    mockIntervalId = null;
-  }
 }

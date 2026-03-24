@@ -1,23 +1,25 @@
 export interface SensorData {
   temperature: number;
   load: number;
-  tilt: number;
-  gforce: number;
   fuel: number;
+  gas: number;
+  humidity: number;
+  tilt: number;
   door: number; // 0 = closed, 1 = open
 }
 
-export interface LocationData {
+export interface GPSData {
+  fix: boolean;
+  satellites: number;
   lat: number;
   lng: number;
 }
 
 export interface VehicleData {
-  id?: string;
-  online: boolean;
   timestamp: number;
+  online: boolean;
   sensors: SensorData;
-  location: LocationData;
+  gps: GPSData;
 }
 
 export interface HistoryPoint {
