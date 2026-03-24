@@ -3,8 +3,11 @@ import { ref, onValue } from 'firebase/database';
 import toast from 'react-hot-toast';
 import { db } from '../firebase/config';
 import type { VehicleData, HistoryPoint } from '../types/vehicle';
+import { getSafeData } from '../utils/safeData';
 
 const MAX_HISTORY = 30;
+const HEARTBEAT_INTERVAL = 1000; // Check every 1s
+const OFFLINE_THRESHOLD = 10000; // 10s timeout
 
 const DOOR_TOAST_ID = 'door-alert';
 const OVERLOAD_TOAST_ID = 'overload-alert';
@@ -12,6 +15,9 @@ const TEMP_TOAST_ID = 'temp-alert';
 
 export function useVehicleData() {
   const [data, setData] = useState<VehicleData | null>(null);
+  const [isOnline, setIsOnline] = useState(false);
+  const [lastUpdateTime, setLastUpdateTime] = useState(Date.now());
+  
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +80,7 @@ export function useVehicleData() {
     };
   }, []);
 
+  // 1. Firebase Data Listener
   useEffect(() => {
     const vehicleRef = ref(db, 'vehicle');
 
@@ -82,7 +89,6 @@ export function useVehicleData() {
       (snapshot) => {
         const val = snapshot.val();
         if (val) {
-          // Robust mapping with default values as requested
           const structuredData: VehicleData = {
             timestamp: val.timestamp || Date.now(),
             online: val.online || false,
@@ -104,6 +110,8 @@ export function useVehicleData() {
           };
 
           setData(structuredData);
+          setLastUpdateTime(Date.now());
+          setIsOnline(true);
           handleAlerts(structuredData);
 
           // Update history ring buffer
@@ -137,5 +145,20 @@ export function useVehicleData() {
     return () => unsubscribe();
   }, [handleAlerts]);
 
-  return { data, history, loading, error };
+  // 2. Heartbeat Monitor (Checks every 1s)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+      if (timeSinceLastUpdate > OFFLINE_THRESHOLD) {
+        setIsOnline(false);
+      }
+    }, HEARTBEAT_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [lastUpdateTime]);
+
+  // Use fallback logic to zero out data if offline
+  const safeData = getSafeData(data, isOnline);
+
+  return { data: safeData, history, loading, error, isOnline };
 }

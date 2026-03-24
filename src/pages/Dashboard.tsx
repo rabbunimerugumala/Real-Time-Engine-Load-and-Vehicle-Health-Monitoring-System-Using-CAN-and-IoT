@@ -44,7 +44,7 @@ function FuelBar({ value }: { value: number }) {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ isDark, onToggleTheme }) => {
-  const { data, history, loading, error } = useVehicleData();
+  const { data, history, loading, error, isOnline } = useVehicleData();
 
   if (loading) {
     return (
@@ -72,7 +72,6 @@ const Dashboard: React.FC<DashboardProps> = ({ isDark, onToggleTheme }) => {
 
   const sensors = data?.sensors;
   const gps = data?.gps ?? { lat: 16.506, lng: 80.648, fix: false, satellites: 0 };
-  const online = data?.online ?? false;
 
   const sensorCards = [
     {
@@ -148,26 +147,44 @@ const Dashboard: React.FC<DashboardProps> = ({ isDark, onToggleTheme }) => {
       unit: '',
       icon: <Activity className="w-5 h-5" />,
       accent: 'gradient-green',
-      status: gps.fix ? 'normal' as const : 'warning' as const,
+      status: gps.fix && isOnline ? 'normal' as const : 'warning' as const,
     },
   ];
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 transition-colors duration-300">
       <Header
-        vehicleId="VEHICLE_01"
-        online={online}
-        lastUpdated={data?.timestamp ?? null}
+        online={isOnline}
         isDark={isDark}
         onToggleTheme={onToggleTheme}
       />
 
-      <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-6">
+      <main className={`max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-6 transition-all duration-500 ${!isOnline ? 'grayscale-[0.5] opacity-80' : ''}`}>
+        {/* Offline Banner */}
+        {!isOnline && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-danger-500/10 border border-danger-500/20 rounded-2xl p-4 flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-xl">📡</span>
+              <div>
+                <h3 className="text-sm font-bold text-danger-600 dark:text-danger-400">Device Offline</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">No heartbeat detected for over 10 seconds. Showing last known state (safe values).</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* ── Sensor Cards Grid ─────────────────────────────── */}
-        <section>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
-            Live Sensors
-          </h2>
+        <section className={!isOnline ? 'blur-[1px]' : ''}>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+              Live Sensors
+            </h2>
+            {!isOnline && <span className="text-[10px] bg-gray-200 dark:bg-gray-800 px-2 py-0.5 rounded text-gray-500">No Pulse</span>}
+          </div>
           <AnimatePresence>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {sensorCards.map((card, i) => (
@@ -217,20 +234,20 @@ const Dashboard: React.FC<DashboardProps> = ({ isDark, onToggleTheme }) => {
         </section>
 
         {/* ── Map ───────────────────────────────────────────── */}
-        <section>
+        <section className={!isOnline || !gps.fix ? 'opacity-60 blur-[2px]' : ''}>
           <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
-            Live Location
+            Live Location {!gps.fix && '— No GPS Signal'}
           </h2>
           <MapView
             lat={gps.lat}
             lng={gps.lng}
-            vehicleId="VEHICLE_01"
-            online={online}
+            vehicleId="Real-Time Vehicle Monitoring"
+            online={isOnline && gps.fix}
           />
         </section>
 
         {/* ── Charts ────────────────────────────────────────── */}
-        <section>
+        <section className={!isOnline ? 'opacity-50' : ''}>
           <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
             Data Trends
           </h2>
@@ -239,7 +256,7 @@ const Dashboard: React.FC<DashboardProps> = ({ isDark, onToggleTheme }) => {
 
         {/* Footer */}
         <footer className="text-center text-xs text-gray-300 dark:text-gray-700 py-4">
-          RabbuniDrive © {new Date().getFullYear()} · ESP32 + Firebase + React
+          Real-Time Vehicle Monitoring © {new Date().getFullYear()} · ESP32 + Firebase + React
         </footer>
       </main>
     </div>
